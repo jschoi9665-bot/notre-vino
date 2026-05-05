@@ -22,14 +22,15 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&display=swap');
 
-    html, body { font-family: 'Noto Sans KR', sans-serif; }
+    html, body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; }
 
     .stApp {
         background-color: #0f0005;
         color: #f5e6e8;
-        font-family: 'Noto Sans KR', sans-serif;
+        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     /* 텍스트 전용 요소만 타겟 — 아이콘 요소 제외 */
     .stMarkdown p, .stMarkdown li,
@@ -39,7 +40,7 @@ st.markdown("""
     .stTabs [data-baseweb="tab"],
     .stCaption, .stAlert,
     label, .stMetric {
-        font-family: 'Noto Sans KR', sans-serif !important;
+        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif !important;
     }
     /* Material Icons 보호 */
     .material-icons, [data-baseweb="icon"] {
@@ -47,26 +48,32 @@ st.markdown("""
     }
     .main .block-container { padding: 0.8rem 0.8rem 2rem; max-width: 500px; margin: 0 auto; }
 
-    h1, h2, h3, h4 {
+    /* 타이틀(h1)만 세리프, 나머지는 Pretendard */
+    h1 {
         font-family: 'Cormorant Garamond', Georgia, serif !important;
         letter-spacing: 0.02em;
+        font-weight: 600 !important;
+    }
+    h2, h3, h4 {
+        font-family: 'Pretendard', -apple-system, sans-serif !important;
+        letter-spacing: -0.01em;
         font-weight: 600 !important;
     }
 
     .stButton > button {
         width: 100%; border-radius: 25px;
         font-size: 14px; font-weight: 500;
-        font-family: 'Pretendard', sans-serif;
+        font-family: 'Pretendard', -apple-system, sans-serif;
         padding: 0.55rem 1rem; border: none;
-        letter-spacing: 0.02em;
+        letter-spacing: 0.01em;
     }
     .stTabs [data-baseweb="tab-list"] {
         gap: 6px; background-color: #1a0508; border-radius: 22px; padding: 5px 6px;
     }
     .stTabs [data-baseweb="tab"] {
         border-radius: 18px; color: #c9a0a0; font-weight: 500;
-        font-family: 'Pretendard', sans-serif;
-        letter-spacing: 0.04em; font-size: 0.8rem;
+        font-family: 'Pretendard', -apple-system, sans-serif;
+        letter-spacing: 0.01em; font-size: 0.8rem;
         padding: 0.35rem 0.9rem !important;
     }
     .stTabs [aria-selected="true"] { background-color: #8b0000 !important; color: white !important; }
@@ -87,13 +94,23 @@ st.markdown("""
         margin-bottom: 0.8rem; text-align: center;
         font-weight: 600; font-size: 1.05rem;
         font-family: 'Pretendard', sans-serif;
-        letter-spacing: 0.03em;
+        letter-spacing: 0.01em;
     }
     .user-jaeseok { background: linear-gradient(135deg, #3d1515, #8b0000); color: #ffd0d0; }
     .user-hyunji  { background: linear-gradient(135deg, #4d1535, #b0006a); color: #ffd0ef; }
     hr { border-color: #3d1515; }
     [data-testid="stMetric"] {
         background: #1a0508; border-radius: 12px; padding: 0.5rem; border: 1px solid #3d1515;
+    }
+    /* 이미지 크기 제한 — 라벨 사진 & 셀러 사진 */
+    [data-testid="stImage"] img {
+        max-height: 200px !important;
+        width: auto !important;
+        max-width: 100%;
+        display: block;
+        margin: 0 auto;
+        border-radius: 10px;
+        object-fit: contain;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -168,11 +185,12 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-col_js, col_hj = st.columns(2)
+_, col_js, col_hj, _ = st.columns([1, 2, 2, 1], gap="small")
 with col_js:
     if st.button(
         f"{'· ' if st.session_state.current_user == '재석' else ''}재석",
-        type="primary" if st.session_state.current_user == '재석' else "secondary"
+        type="primary" if st.session_state.current_user == '재석' else "secondary",
+        use_container_width=True,
     ):
         st.session_state.current_user = '재석'
         st.rerun()
@@ -180,7 +198,8 @@ with col_js:
 with col_hj:
     if st.button(
         f"{'· ' if st.session_state.current_user == '현지' else ''}현지",
-        type="primary" if st.session_state.current_user == '현지' else "secondary"
+        type="primary" if st.session_state.current_user == '현지' else "secondary",
+        use_container_width=True,
     ):
         st.session_state.current_user = '현지'
         st.rerun()
