@@ -131,6 +131,7 @@ defaults = {
     'budget_min': 20000,
     'budget_max': 50000,
     'similar_cache': {},
+    'wine_detail': {},  # {detail_{wid}: dict} AI 상세 설명 캐시
     'delete_confirm': {},
     'share_wine': {},   # {wine_id: True/False} 공유 폼 표시 여부
     'edit_wine': {},    # {wine_id: True/False} 평점 수정 폼 표시 여부
@@ -552,217 +553,256 @@ with tab2:
     else:
         st.caption(f"총 {len(wines)}개")
 
-        for wine in wines:
-            wid = wine['id']
-            is_high = (wine.get('rating') or 0) >= 4
-            name_label = wine.get('name','?')
-            color_label = wine.get('color','')
+        # ── 별점별 탭 ──
+        r5, r4, r3, r2, r1 = st.tabs(["⭐⭐⭐⭐⭐", "⭐⭐⭐⭐", "⭐⭐⭐", "⭐⭐", "⭐"])
 
-            with st.expander(f"**{name_label}**  {stars(wine.get('rating',0))}"):
+        for rtab, r in [(r5,5),(r4,4),(r3,3),(r2,2),(r1,1)]:
+            with rtab:
+                group = [w for w in wines if (w.get('rating') or 0) == r]
+                if not group:
+                    st.markdown(
+                        "<div style='text-align:center;padding:1.5rem;color:#c9a0a0;"
+                        "font-size:0.9rem;'>해당 별점의 와인이 없어요</div>",
+                        unsafe_allow_html=True
+                    )
+                    continue
 
-                # 저장된 사진이 있으면 상단에 표시
-                if wine.get('image_data'):
-                    try:
-                        img_bytes = base64.b64decode(wine['image_data'])
-                        st.image(img_bytes, use_container_width=True)
-                    except Exception:
-                        pass
+                for wine in group:
+                    wid = wine['id']
+                    is_high = r >= 4
+                    color_label = wine.get('color','')
 
-                ci, cc = st.columns([3,2])
+                    with st.expander(f"**{wine.get('name','?')}**"):
 
-                with ci:
-                    if color_label:
-                        st.markdown(
-                            f"<span style='font-size:0.85rem;color:#c9a0a0;'>"
-                            f"{color_dot(color_label)}{color_label}</span>",
-                            unsafe_allow_html=True
-                        )
-                    if wine.get('producer'):      st.markdown(f"**생산자** · {wine['producer']}")
-                    if wine.get('grape_variety'): st.markdown(f"**품종** · {wine['grape_variety']}")
-                    if wine.get('region'):
-                        st.markdown(f"**지역** · {wine['region']}{', '+wine['country'] if wine.get('country') else ''}")
-                    if wine.get('vintage'):       st.markdown(f"**빈티지** · {wine['vintage']}년")
-                    if wine.get('drink_date'):    st.markdown(f"**마신 날짜** · {wine['drink_date']}")
-                    if wine.get('vivino_score'):
-                        st.markdown(vivino_badge(wine['vivino_score']), unsafe_allow_html=True)
+                        # 저장된 사진
+                        if wine.get('image_data'):
+                            try:
+                                img_bytes = base64.b64decode(wine['image_data'])
+                                st.image(img_bytes, use_container_width=True)
+                            except Exception:
+                                pass
 
-                    if wine.get('purchase_location') or wine.get('purchase_price'):
-                        st.markdown("---")
-                        if wine.get('purchase_location'):
-                            st.markdown(f"<span class='location-tag'>{wine['purchase_location']}</span>",
-                                        unsafe_allow_html=True)
-                        if wine.get('purchase_price'):
-                            st.markdown(f"<span class='price-tag'>{wine['purchase_price']:,}원</span>",
-                                        unsafe_allow_html=True)
-
-                    if wine.get('memo'): st.markdown(f"**메모** · {wine['memo']}")
-
-                with cc:
-                    has_t = all(wine.get(k) is not None for k in ['tannin','acidity','sweetness','body','fruitiness'])
-                    if has_t:
-                        st.plotly_chart(
-                            radar_chart([wine['tannin'],wine['acidity'],wine['sweetness'],
-                                         wine['body'],wine['fruitiness']], height=190),
-                            use_container_width=True
-                        )
-
-                # 평점 4점↑: 비슷한 와인 (정교화)
-                if is_high:
-                    st.markdown("---")
-                    st.markdown("### 비슷한 와인 (국내 구매 가능)")
-                    ckey = f"sim_{wid}"
-
-                    if ckey in st.session_state.similar_cache:
-                        cached = st.session_state.similar_cache[ckey]
-                        if 'error' in cached:
-                            st.error(cached['error'])
-                        else:
-                            if cached.get('match_summary'):
-                                st.caption(cached['match_summary'])
-                            for i, rec in enumerate(cached.get('recommendations', []), 1):
-                                badge = vivino_badge(rec.get('vivino_score'))
-                                with st.expander(
-                                    f"#{i} {rec.get('name','')} "
-                                    f"({rec.get('vintage','')})  · "
-                                    f"{rec.get('price_korea',0):,}원" if rec.get('price_korea') else
-                                    f"#{i} {rec.get('name','')}"
-                                ):
-                                    if badge: st.markdown(badge, unsafe_allow_html=True)
-                                    col_a, col_b = st.columns(2)
-                                    with col_a:
-                                        if rec.get('producer'):      st.markdown(f"**생산자** · {rec['producer']}")
-                                        if rec.get('grape_variety'): st.markdown(f"**품종** · {rec['grape_variety']}")
-                                        if rec.get('region'):        st.markdown(f"**지역** · {rec['region']}")
-                                    with col_b:
-                                        if rec.get('price_korea'):
-                                            st.markdown(f"<span class='price-tag'>{rec['price_korea']:,}원</span>",
-                                                        unsafe_allow_html=True)
-                                        if rec.get('where_to_buy'):
-                                            st.markdown(f"<span class='location-tag'>{rec['where_to_buy']}</span>",
-                                                        unsafe_allow_html=True)
-                                    if rec.get('similarity_detail'):
-                                        st.markdown(f"**유사도** · {rec['similarity_detail']}")
-                                    if rec.get('taste_description'):
-                                        st.caption(rec['taste_description'])
-                                    if rec.get('food_pairing'):
-                                        st.markdown(rec['food_pairing'])
-                    else:
-                        if st.button("비슷한 와인 찾기", key=f"sim_btn_{wid}"):
-                            with st.spinner("분석 중..."):
-                                result = claude_helper.get_similar_wines_korea(
-                                    wine_name=wine.get('name',''),
-                                    grape_variety=wine.get('grape_variety',''),
-                                    region=wine.get('region',''),
-                                    color=wine.get('color',''),
-                                    rating=wine.get('rating',4),
-                                    tannin=wine.get('tannin',3),
-                                    acidity=wine.get('acidity',3),
-                                    sweetness=wine.get('sweetness',3),
-                                    body=wine.get('body',3),
-                                    fruitiness=wine.get('fruitiness',3),
+                        ci, cc = st.columns([3,2])
+                        with ci:
+                            if color_label:
+                                st.markdown(
+                                    f"<span style='font-size:0.85rem;color:#c9a0a0;'>"
+                                    f"{color_dot(color_label)}{color_label}</span>",
+                                    unsafe_allow_html=True
                                 )
-                                st.session_state.similar_cache[ckey] = result
+                            if wine.get('producer'):      st.markdown(f"**생산자** · {wine['producer']}")
+                            if wine.get('grape_variety'): st.markdown(f"**품종** · {wine['grape_variety']}")
+                            if wine.get('region'):
+                                st.markdown(f"**지역** · {wine['region']}{', '+wine['country'] if wine.get('country') else ''}")
+                            if wine.get('vintage'):       st.markdown(f"**빈티지** · {wine['vintage']}년")
+                            if wine.get('drink_date'):    st.markdown(f"**마신 날짜** · {wine['drink_date']}")
+                            if wine.get('vivino_score'):
+                                st.markdown(vivino_badge(wine['vivino_score']), unsafe_allow_html=True)
+                            if wine.get('purchase_location') or wine.get('purchase_price'):
+                                st.markdown("---")
+                                if wine.get('purchase_location'):
+                                    st.markdown(f"<span class='location-tag'>{wine['purchase_location']}</span>",
+                                                unsafe_allow_html=True)
+                                if wine.get('purchase_price'):
+                                    st.markdown(f"<span class='price-tag'>{wine['purchase_price']:,}원</span>",
+                                                unsafe_allow_html=True)
+                            if wine.get('memo'): st.markdown(f"**메모** · {wine['memo']}")
+
+                        with cc:
+                            has_t = all(wine.get(k) is not None for k in ['tannin','acidity','sweetness','body','fruitiness'])
+                            if has_t:
+                                st.plotly_chart(
+                                    radar_chart([wine['tannin'],wine['acidity'],wine['sweetness'],
+                                                 wine['body'],wine['fruitiness']], height=190),
+                                    use_container_width=True
+                                )
+
+                        # ── AI 상세 설명 ──
+                        st.markdown("---")
+                        detail_key = f"detail_{wid}"
+                        if detail_key in st.session_state.wine_detail:
+                            detail = st.session_state.wine_detail[detail_key]
+                            st.markdown("### 🍷 AI 상세 설명")
+                            if detail.get('taste_profile'):
+                                st.info(detail['taste_profile'])
+                            if detail.get('description'):
+                                st.write(detail['description'])
+                            d_vals = [detail.get('tannin') or 3, detail.get('acidity') or 3,
+                                      detail.get('sweetness') or 3, detail.get('body') or 3,
+                                      detail.get('fruitiness') or 3]
+                            st.plotly_chart(radar_chart(d_vals, 220), use_container_width=True)
+                            if detail.get('food_pairing'):
+                                chips = " ".join([f"<span class='chip'>{f}</span>" for f in detail['food_pairing']])
+                                st.markdown(chips, unsafe_allow_html=True)
+                            if detail.get('awards'):
+                                st.caption(f"🏆 {detail['awards']}")
+                            if detail.get('best_vintage'):
+                                st.caption(f"추천 빈티지: {detail['best_vintage']}")
+                            if detail.get('where_to_buy_korea'):
+                                st.markdown(f"<span class='location-tag'>{detail['where_to_buy_korea']}</span>",
+                                            unsafe_allow_html=True)
+                            if st.button("상세 설명 닫기", key=f"det_close_{wid}"):
+                                del st.session_state.wine_detail[detail_key]
+                                st.rerun()
+                        else:
+                            if st.button("🍷 AI 상세 설명 보기", key=f"detail_btn_{wid}"):
+                                with st.spinner("와인 정보 검색 중..."):
+                                    try:
+                                        detail = claude_helper.search_wine_by_name(wine.get('name',''))
+                                        st.session_state.wine_detail[detail_key] = detail
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(str(e))
+
+                        # ── 비슷한 와인 (4점↑) ──
+                        if is_high:
+                            st.markdown("---")
+                            st.markdown("### 비슷한 와인 (국내 구매 가능)")
+                            ckey = f"sim_{wid}"
+
+                            if ckey in st.session_state.similar_cache:
+                                cached = st.session_state.similar_cache[ckey]
+                                if 'error' in cached:
+                                    st.error(cached['error'])
+                                else:
+                                    if cached.get('match_summary'):
+                                        st.caption(cached['match_summary'])
+                                    for i, rec in enumerate(cached.get('recommendations', []), 1):
+                                        badge = vivino_badge(rec.get('vivino_score'))
+                                        with st.expander(
+                                            f"#{i} {rec.get('name','')} "
+                                            f"({rec.get('vintage','')})  · "
+                                            f"{rec.get('price_korea',0):,}원" if rec.get('price_korea') else
+                                            f"#{i} {rec.get('name','')}"
+                                        ):
+                                            if badge: st.markdown(badge, unsafe_allow_html=True)
+                                            col_a, col_b = st.columns(2)
+                                            with col_a:
+                                                if rec.get('producer'):      st.markdown(f"**생산자** · {rec['producer']}")
+                                                if rec.get('grape_variety'): st.markdown(f"**품종** · {rec['grape_variety']}")
+                                                if rec.get('region'):        st.markdown(f"**지역** · {rec['region']}")
+                                            with col_b:
+                                                if rec.get('price_korea'):
+                                                    st.markdown(f"<span class='price-tag'>{rec['price_korea']:,}원</span>",
+                                                                unsafe_allow_html=True)
+                                                if rec.get('where_to_buy'):
+                                                    st.markdown(f"<span class='location-tag'>{rec['where_to_buy']}</span>",
+                                                                unsafe_allow_html=True)
+                                            if rec.get('similarity_detail'):
+                                                st.markdown(f"**유사도** · {rec['similarity_detail']}")
+                                            if rec.get('taste_description'):
+                                                st.caption(rec['taste_description'])
+                                            if rec.get('food_pairing'):
+                                                st.markdown(rec['food_pairing'])
+                            else:
+                                if st.button("비슷한 와인 찾기", key=f"sim_btn_{wid}"):
+                                    with st.spinner("분석 중..."):
+                                        result = claude_helper.get_similar_wines_korea(
+                                            wine_name=wine.get('name',''),
+                                            grape_variety=wine.get('grape_variety',''),
+                                            region=wine.get('region',''),
+                                            color=wine.get('color',''),
+                                            rating=wine.get('rating',4),
+                                            tannin=wine.get('tannin',3),
+                                            acidity=wine.get('acidity',3),
+                                            sweetness=wine.get('sweetness',3),
+                                            body=wine.get('body',3),
+                                            fruitiness=wine.get('fruitiness',3),
+                                        )
+                                        st.session_state.similar_cache[ckey] = result
+                                        st.rerun()
+
+                        # ── 다른 사람 기록에 추가 ──
+                        st.markdown("---")
+                        other_user = '현지' if USER == '재석' else '재석'
+                        other_wines = database.get_all_wines(other_user)
+                        already_has = any(w.get('name','') == wine.get('name','') for w in other_wines)
+
+                        if already_has:
+                            st.caption(f"{other_user}도 이미 이 와인을 기록했어요")
+                        elif st.session_state.share_wine.get(wid):
+                            st.markdown(f"**{other_user} 기록에 추가**")
+                            with st.form(f"share_form_{wid}"):
+                                share_rating = st.select_slider(
+                                    f"{other_user}의 별점", options=[1,2,3,4,5], value=3,
+                                    format_func=lambda x: "⭐"*x, key=f"sr_{wid}"
+                                )
+                                share_memo = st.text_area(
+                                    f"{other_user}의 메모",
+                                    placeholder=f"{other_user}이/가 마셨을 때 어땠나요?",
+                                    height=70, key=f"sm_{wid}"
+                                )
+                                sc1, sc2 = st.columns(2)
+                                with sc1:
+                                    if st.form_submit_button("추가하기", type="primary"):
+                                        new_record = wine.copy()
+                                        new_record.update({
+                                            'user_name': other_user,
+                                            'rating': share_rating,
+                                            'memo': share_memo,
+                                        })
+                                        new_record.pop('id', None)
+                                        database.save_wine(new_record)
+                                        st.session_state.share_wine[wid] = False
+                                        st.success(f"{other_user}의 기록에 추가됐어요!")
+                                        st.rerun()
+                                with sc2:
+                                    if st.form_submit_button("취소"):
+                                        st.session_state.share_wine[wid] = False
+                                        st.rerun()
+                        else:
+                            if st.button(f"{other_user} 기록에도 추가하기", key=f"share_{wid}"):
+                                st.session_state.share_wine[wid] = True
                                 st.rerun()
 
-                # ── 다른 사람 기록에 추가 ──
-                st.markdown("---")
-                other_user = '현지' if USER == '재석' else '재석'
-
-                # 이미 상대방 기록에 있는지 확인
-                other_wines = database.get_all_wines(other_user)
-                already_has = any(w.get('name','') == wine.get('name','') for w in other_wines)
-
-                if already_has:
-                    st.caption(f"{other_user}도 이미 이 와인을 기록했어요")
-                elif st.session_state.share_wine.get(wid):
-                    # 공유 폼 표시
-                    st.markdown(f"**{other_user} 기록에 추가**")
-                    with st.form(f"share_form_{wid}"):
-                        share_rating = st.select_slider(
-                            f"{other_user}의 별점", options=[1,2,3,4,5], value=3,
-                            format_func=lambda x: "⭐"*x, key=f"sr_{wid}"
-                        )
-                        share_memo = st.text_area(
-                            f"{other_user}의 메모",
-                            placeholder=f"{other_user}이/가 마셨을 때 어땠나요?",
-                            height=70, key=f"sm_{wid}"
-                        )
-                        sc1, sc2 = st.columns(2)
-                        with sc1:
-                            if st.form_submit_button("추가하기", type="primary"):
-                                new_record = wine.copy()
-                                new_record.update({
-                                    'user_name': other_user,
-                                    'rating': share_rating,
-                                    'memo': share_memo,
-                                    'id': None,  # 새 레코드
-                                })
-                                new_record.pop('id', None)
-                                database.save_wine(new_record)
-                                st.session_state.share_wine[wid] = False
-                                st.success(f"{other_user}의 기록에 추가됐어요!")
+                        # ── 평점 수정 ──
+                        st.markdown("---")
+                        if st.session_state.edit_wine.get(wid):
+                            st.markdown("**별점 · 메모 수정**")
+                            with st.form(f"edit_form_{wid}"):
+                                cur_rating = wine.get('rating') or 3
+                                cur_memo   = wine.get('memo') or ''
+                                new_rating = st.select_slider(
+                                    "별점", options=[1,2,3,4,5], value=cur_rating,
+                                    format_func=lambda x: "⭐"*x, key=f"er_{wid}"
+                                )
+                                new_memo = st.text_area("메모", value=cur_memo, height=80, key=f"em_{wid}")
+                                e1, e2 = st.columns(2)
+                                with e1:
+                                    if st.form_submit_button("저장", type="primary"):
+                                        database.update_wine_rating(wid, new_rating, new_memo)
+                                        st.session_state.edit_wine[wid] = False
+                                        st.success("수정됐어요!")
+                                        st.rerun()
+                                with e2:
+                                    if st.form_submit_button("취소"):
+                                        st.session_state.edit_wine[wid] = False
+                                        st.rerun()
+                        else:
+                            if st.button("별점 · 메모 수정", key=f"edit_{wid}"):
+                                st.session_state.edit_wine[wid] = True
                                 st.rerun()
-                        with sc2:
-                            if st.form_submit_button("취소"):
-                                st.session_state.share_wine[wid] = False
-                                st.rerun()
-                else:
-                    if st.button(
-                        f"{other_user} 기록에도 추가하기",
-                        key=f"share_{wid}"
-                    ):
-                        st.session_state.share_wine[wid] = True
-                        st.rerun()
 
-                # ── 평점 수정 ──
-                st.markdown("---")
-                if st.session_state.edit_wine.get(wid):
-                    st.markdown("**별점 · 메모 수정**")
-                    with st.form(f"edit_form_{wid}"):
-                        cur_rating = wine.get('rating') or 3
-                        cur_memo   = wine.get('memo') or ''
-                        new_rating = st.select_slider(
-                            "별점", options=[1,2,3,4,5], value=cur_rating,
-                            format_func=lambda x: "⭐"*x, key=f"er_{wid}"
-                        )
-                        new_memo = st.text_area(
-                            "메모", value=cur_memo, height=80, key=f"em_{wid}"
-                        )
-                        e1, e2 = st.columns(2)
-                        with e1:
-                            if st.form_submit_button("저장", type="primary"):
-                                database.update_wine_rating(wid, new_rating, new_memo)
-                                st.session_state.edit_wine[wid] = False
-                                st.success("수정됐어요!")
+                        # ── 삭제 ──
+                        st.markdown("---")
+                        if st.session_state.delete_confirm.get(wid):
+                            st.warning("정말 삭제할까요?")
+                            dy, dn = st.columns(2)
+                            with dy:
+                                if st.button("삭제", key=f"yes_{wid}"):
+                                    database.delete_wine(wid)
+                                    st.session_state.similar_cache.pop(f"sim_{wid}", None)
+                                    st.session_state.wine_detail.pop(f"detail_{wid}", None)
+                                    st.session_state.delete_confirm[wid] = False
+                                    st.rerun()
+                            with dn:
+                                if st.button("취소", key=f"no_{wid}"):
+                                    st.session_state.delete_confirm[wid] = False
+                                    st.rerun()
+                        else:
+                            if st.button("삭제", key=f"del_{wid}"):
+                                st.session_state.delete_confirm[wid] = True
                                 st.rerun()
-                        with e2:
-                            if st.form_submit_button("취소"):
-                                st.session_state.edit_wine[wid] = False
-                                st.rerun()
-                else:
-                    if st.button("별점 · 메모 수정", key=f"edit_{wid}"):
-                        st.session_state.edit_wine[wid] = True
-                        st.rerun()
-
-                # ── 삭제 ──
-                st.markdown("---")
-                if st.session_state.delete_confirm.get(wid):
-                    st.warning("정말 삭제할까요?")
-                    dy, dn = st.columns(2)
-                    with dy:
-                        if st.button("삭제", key=f"yes_{wid}"):
-                            database.delete_wine(wid)
-                            st.session_state.similar_cache.pop(f"sim_{wid}", None)
-                            st.session_state.delete_confirm[wid] = False
-                            st.rerun()
-                    with dn:
-                        if st.button("취소", key=f"no_{wid}"):
-                            st.session_state.delete_confirm[wid] = False
-                            st.rerun()
-                else:
-                    if st.button("삭제", key=f"del_{wid}"):
-                        st.session_state.delete_confirm[wid] = True
-                        st.rerun()
 
 
 # ══════════════════════════════════════════
