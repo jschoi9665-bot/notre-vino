@@ -345,7 +345,59 @@ JSON만 응답:
 
 
 # ──────────────────────────────────────────
-# 6. 한국 온라인 판매처 실시간 확인 (웹 검색)
+# 6. 소믈리에 노트 (기본 정보 외 심화 정보)
+# ──────────────────────────────────────────
+def get_sommelier_notes(wine_name, producer="", region="", vintage=None, grape_variety=""):
+    """서빙 가이드 · 상세 향 노트 · 음용 적기 · 와이너리 스토리"""
+    client = get_client()
+    vintage_str = f"{vintage}년산" if vintage else "빈티지 미상"
+
+    prompt = f"""당신은 세계 최고 수준의 소믈리에입니다.
+아래 와인에 대해 기본 맛 수치(탄닌·산도 등) 외의 심화 정보를 알려주세요.
+
+와인: {wine_name}
+생산자: {producer}
+지역: {region}
+품종: {grape_variety}
+빈티지: {vintage_str}
+
+JSON 형식으로만 응답:
+{{
+  "aroma_notes": {{
+    "primary": ["과일향 3~4가지 (예: 블랙베리, 자두, 말린 체리)"],
+    "secondary": ["발효 과정 향 2~3가지 (예: 바닐라, 버터, 이스트)"],
+    "tertiary": ["숙성 과정 향 2~3가지 (예: 시더, 담배 잎, 가죽, 트러플)"]
+  }},
+  "serving": {{
+    "temperature": "서빙 온도 (예: 16~18°C)",
+    "decanting": "디캔팅 여부와 시간 (예: 45분 디캔팅 권장 / 불필요)",
+    "glass": "추천 글라스 (예: 보르도형 대형 글라스)"
+  }},
+  "drinking_window": {{
+    "now": true_또는_false,
+    "peak_start": "최적 음용 시작 연도 숫자 (예: 2025)",
+    "peak_end": "최적 음용 종료 연도 숫자 (예: 2035)",
+    "aging_note": "숙성 가이드 한 문장"
+  }},
+  "winery_story": "와이너리·생산자 스토리 2~3문장. 역사, 철학, 특별한 점 포함."
+}}
+
+JSON 외 텍스트 금지."""
+
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1500,
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    try:
+        return _parse_json(message.content[0].text)
+    except json.JSONDecodeError:
+        return {"error": "소믈리에 노트를 불러오는 중 오류가 발생했습니다."}
+
+
+# ──────────────────────────────────────────
+# 7. 한국 온라인 판매처 실시간 확인 (웹 검색)
 # ──────────────────────────────────────────
 def check_wines_availability_korea(wine_names: list) -> dict:
     """Claude 웹 검색으로 와인 한국 온라인 판매 여부 실시간 확인.

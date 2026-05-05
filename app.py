@@ -64,8 +64,25 @@ st.markdown("""
         width: 100%; border-radius: 25px;
         font-size: 14px; font-weight: 500;
         font-family: 'Pretendard', -apple-system, sans-serif;
-        padding: 0.55rem 1rem; border: none;
+        padding: 0.55rem 1rem;
         letter-spacing: 0.01em;
+        background-color: #1a0508 !important;
+        color: #e8c8c8 !important;
+        border: 1px solid #5d2020 !important;
+    }
+    .stButton > button:hover {
+        background-color: #2d0d10 !important;
+        border-color: #8b0000 !important;
+        color: #f5e6e8 !important;
+    }
+    /* Primary 버튼은 레드 유지 */
+    [data-testid="baseButton-primary"] {
+        background-color: #8b0000 !important;
+        color: #ffffff !important;
+        border: none !important;
+    }
+    [data-testid="baseButton-primary"]:hover {
+        background-color: #a00000 !important;
     }
     .stTabs [data-baseweb="tab-list"] {
         gap: 6px; background-color: #1a0508; border-radius: 22px; padding: 5px 6px;
@@ -111,21 +128,6 @@ st.markdown("""
         margin: 0 auto;
         border-radius: 10px;
         object-fit: contain;
-    }
-    /* 보조 버튼 — 어두운 배경, 가독성 개선 */
-    [data-testid="baseButton-secondary"] {
-        background-color: #1a0508 !important;
-        color: #e8c8c8 !important;
-        border: 1px solid #5d2020 !important;
-    }
-    [data-testid="baseButton-secondary"]:hover {
-        background-color: #2d0d10 !important;
-        border-color: #8b0000 !important;
-    }
-    /* 와인 목록 버튼 — 리스트 아이템 스타일 */
-    [data-testid="baseButton-secondary"]:has(span) {
-        text-align: left !important;
-        justify-content: flex-start !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -678,15 +680,21 @@ with tab2:
                         action_del  = ab3
 
                     with ab1:
-                        det_label = "🍷 AI설명 닫기" if det_loaded else "🍷 AI설명"
+                        det_label = "📖 노트 닫기" if det_loaded else "📖 소믈리에 노트"
                         if st.button(det_label, key=f"detail_btn_{wid}"):
                             if det_loaded:
                                 del st.session_state.wine_detail[detail_key]
                                 st.rerun()
                             else:
-                                with st.spinner("검색 중..."):
+                                with st.spinner("소믈리에 노트 불러오는 중..."):
                                     try:
-                                        d = claude_helper.search_wine_by_name(sel_wine.get('name',''))
+                                        d = claude_helper.get_sommelier_notes(
+                                            wine_name=sel_wine.get('name',''),
+                                            producer=sel_wine.get('producer',''),
+                                            region=sel_wine.get('region',''),
+                                            vintage=sel_wine.get('vintage'),
+                                            grape_variety=sel_wine.get('grape_variety',''),
+                                        )
                                         st.session_state.wine_detail[detail_key] = d
                                         st.rerun()
                                     except Exception as e:
@@ -725,25 +733,59 @@ with tab2:
                             st.session_state.delete_confirm[wid] = not st.session_state.delete_confirm.get(wid, False)
                             st.rerun()
 
-                    # ── AI 상세 설명 (맛 프로필 + 레이더 + 페어링) ──
+                    # ── 소믈리에 노트 ──
                     if det_loaded:
-                        detail = st.session_state.wine_detail[detail_key]
+                        notes = st.session_state.wine_detail[detail_key]
                         st.markdown("---")
-                        st.markdown("### 🍷 AI 상세 설명")
-                        if detail.get('taste_profile'):
-                            st.info(detail['taste_profile'])
-                        d_vals = [detail.get('tannin') or 3, detail.get('acidity') or 3,
-                                  detail.get('sweetness') or 3, detail.get('body') or 3,
-                                  detail.get('fruitiness') or 3]
-                        st.plotly_chart(radar_chart(d_vals, 240), use_container_width=True)
-                        dc1,dc2,dc3,dc4,dc5 = st.columns(5)
-                        for col, lbl, v in zip([dc1,dc2,dc3,dc4,dc5],
-                                               ['탄닌','산도','당도','바디','과일향'], d_vals):
-                            with col: st.metric(lbl, f"{v:.0f}/5")
-                        if detail.get('food_pairing'):
-                            chips = " ".join([f"<span class='chip'>{f}</span>"
-                                             for f in detail['food_pairing']])
-                            st.markdown(chips, unsafe_allow_html=True)
+                        st.markdown("### 📖 소믈리에 노트")
+
+                        if 'error' in notes:
+                            st.error(notes['error'])
+                        else:
+                            # 🌹 향 노트
+                            an = notes.get('aroma_notes', {})
+                            if an:
+                                st.markdown("**🌹 향 노트**")
+                                if an.get('primary'):
+                                    st.caption("과일향")
+                                    st.markdown(" ".join(
+                                        f"<span class='chip'>{a}</span>" for a in an['primary']
+                                    ), unsafe_allow_html=True)
+                                if an.get('secondary'):
+                                    st.caption("발효향")
+                                    st.markdown(" ".join(
+                                        f"<span class='chip'>{a}</span>" for a in an['secondary']
+                                    ), unsafe_allow_html=True)
+                                if an.get('tertiary'):
+                                    st.caption("숙성향")
+                                    st.markdown(" ".join(
+                                        f"<span class='chip'>{a}</span>" for a in an['tertiary']
+                                    ), unsafe_allow_html=True)
+
+                            # 🌡️ 서빙 가이드
+                            sv = notes.get('serving', {})
+                            if sv:
+                                st.markdown("**🌡️ 서빙 가이드**")
+                                if sv.get('temperature'): st.markdown(f"· **온도** {sv['temperature']}")
+                                if sv.get('decanting'):   st.markdown(f"· **디캔팅** {sv['decanting']}")
+                                if sv.get('glass'):       st.markdown(f"· **글라스** {sv['glass']}")
+
+                            # 🕰️ 음용 적기
+                            dw = notes.get('drinking_window', {})
+                            if dw:
+                                st.markdown("**🕰️ 음용 적기**")
+                                peak = f"{dw.get('peak_start','')} ~ {dw.get('peak_end','')}년"
+                                if dw.get('now', True):
+                                    st.success(f"✅ 지금 마시기 좋아요  ·  최적기 {peak}")
+                                else:
+                                    st.info(f"⏳ 조금 더 기다리면 좋아요  ·  최적기 {peak}")
+                                if dw.get('aging_note'):
+                                    st.caption(dw['aging_note'])
+
+                            # 📖 와이너리 스토리
+                            if notes.get('winery_story'):
+                                st.markdown("**📖 와이너리 스토리**")
+                                st.write(notes['winery_story'])
 
                     # ── 비슷한 와인 ──
                     if is_high and sim_loaded:
