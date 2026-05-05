@@ -13,9 +13,15 @@ load_dotenv(dotenv_path=_env_path, override=True)
 
 
 def get_client():
+    # Streamlit Cloud secrets 우선, 없으면 환경변수 사용
     api_key = os.getenv('ANTHROPIC_API_KEY')
+    try:
+        import streamlit as st
+        api_key = st.secrets.get("ANTHROPIC_API_KEY", api_key)
+    except Exception:
+        pass
     if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY가 설정되지 않았습니다. .env 파일을 확인해주세요.")
+        raise ValueError("ANTHROPIC_API_KEY가 설정되지 않았습니다.")
     return anthropic.Anthropic(api_key=api_key)
 
 
