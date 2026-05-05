@@ -292,6 +292,7 @@ JSON으로만 응답:
 # ──────────────────────────────────────────
 # 5. 예산별 추천
 # ──────────────────────────────────────────
+
 def get_budget_recommendations(budget_min, budget_max, taste_stats=None):
     client = get_client()
 
@@ -341,3 +342,64 @@ JSON만 응답:
         return _parse_json(message.content[0].text)
     except json.JSONDecodeError:
         return {"error": "추천 생성 중 오류가 발생했습니다."}
+
+
+# ──────────────────────────────────────────
+# 6. 한국 온라인 판매처 실시간 확인 (웹 검색)
+# ──────────────────────────────────────────
+def check_wines_availability_korea(wine_names: list) -> dict:
+    """Claude 웹 검색으로 와인 한국 온라인 판매 여부 실시간 확인.
+    Returns: {wine_name: {"available": bool, "stores": str, "note": str}}
+    """
+    client = get_client()
+    wines_str = "\n".join(f"- {name}" for name in wine_names)
+
+    prompt = f"""다음 와인들이 현재 한국에서 온라인으로 구매 가능한지 확인해주세요.
+데일리샷(dailyshot.co), 와인앤모어(wineandmore.co.kr), 마켓컬리(kurly.com), 이마트몰(emart.com), GS25 wine25(wine25.com) 등에서 각 와인을 검색해보세요.
+
+확인할 와인:
+{wines_str}
+
+각 와인에 대해 웹 검색으로 실제 판매 여부를 확인한 후, 다음 JSON 형식으로만 응답하세요:
+{{
+  "results": {{
+    "정확한와인명1": {{
+      "available": true,
+      "stores": "데일리샷, 마켓컬리",
+      "note": "가격 또는 재고 추가 정보 (있으면)"
+    }},
+    "정확한와인명2": {{
+      "available": false,
+      "stores": "",
+      "note": "국내 온라인 판매처에서 확인 불가"
+    }}
+  }}
+}}
+
+중요: 키는 위에서 전달한 와인명을 그대로 사용하세요. available은 실제 검색 결과에만 기반하세요. JSON 외 텍스트 금지."""
+
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=3000,
+        tools=[{
+            "type": "web_search_20260209",
+            "name": "web_search",
+            "max_uses": min(len(wine_names) * 2, 10),
+        }],
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    # 텍스트 블록 추출 (웹 검색 결과 처리 후 최종 텍스트)
+    result_text = ""
+    for block in response.content:
+        if hasattr(block, "type") and block.type == "text":
+            result_text = block.text  # 마지막 text 블록 사용
+
+    if not result_text:
+        return {}
+
+    try:
+        parsed = _parse_json(result_text)
+        return parsed.get("results", {})
+    except Exception:
+        return {}

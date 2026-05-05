@@ -125,7 +125,9 @@ defaults = {
     'analyzed_wine': None,
     'search_result': None,
     'recommendations': {'재석': None, '현지': None},
+    'rec_avail': {'재석': None, '현지': None},    # 취향 추천 판매처 확인 결과
     'budget_recs': None,
+    'budget_avail': None,                          # 예산 추천 판매처 확인 결과
     'budget_min': 20000,
     'budget_max': 50000,
     'similar_cache': {},
@@ -838,6 +840,7 @@ with tab3:
             with st.spinner("분석 중..."):
                 try:
                     st.session_state.recommendations[USER] = claude_helper.get_recommendations(ts, all_wines)
+                    st.session_state.rec_avail[USER] = None  # 새 추천 시 판매처 확인 초기화
                 except Exception as e:
                     st.error(str(e))
 
@@ -858,11 +861,41 @@ with tab3:
                     )
                 if recs.get('taste_summary'): st.info(recs['taste_summary'])
 
+                # ── 한국 판매처 실시간 확인 버튼 ──
+                rec_avail = st.session_state.rec_avail.get(USER)
+                if not rec_avail:
+                    if st.button("🔍 한국 판매처 실시간 확인", key="rec_avail_btn"):
+                        wine_names = [r.get('name','') for r in recs.get('recommendations',[]) if r.get('name')]
+                        with st.spinner("한국 온라인 판매처 검색 중... (20~40초)"):
+                            try:
+                                avail = claude_helper.check_wines_availability_korea(wine_names)
+                                st.session_state.rec_avail[USER] = avail
+                                st.rerun()
+                            except Exception as e:
+                                st.error(str(e))
+                else:
+                    ok = sum(1 for v in rec_avail.values() if v.get('available'))
+                    total = len(rec_avail)
+                    st.caption(f"✅ 판매처 확인 완료 — {total}개 중 {ok}개 국내 온라인 판매 확인")
+
                 st.markdown("### 추천 와인")
                 for i, rec in enumerate(recs.get('recommendations',[]), 1):
                     badge = vivino_badge(rec.get('vivino_score'))
                     with st.expander(f"#{i} {rec.get('name','')}  ·  {rec.get('price_range','')}"):
                         if badge: st.markdown(badge, unsafe_allow_html=True)
+
+                        # 판매처 배지
+                        rec_avail = st.session_state.rec_avail.get(USER) or {}
+                        avail_info = rec_avail.get(rec.get('name', ''))
+                        if avail_info:
+                            if avail_info.get('available'):
+                                stores = avail_info.get('stores', '')
+                                st.success(f"✅ 한국 판매 확인{' · ' + stores if stores else ''}")
+                            else:
+                                st.error(f"❌ 국내 온라인 판매처 미확인")
+                            if avail_info.get('note'):
+                                st.caption(avail_info['note'])
+
                         if rec.get('producer'):     st.markdown(f"**생산자** · {rec['producer']}")
                         if rec.get('region'):       st.markdown(f"**지역** · {rec['region']}")
                         if rec.get('grape_variety'):st.markdown(f"**품종** · {rec['grape_variety']}")
@@ -871,6 +904,7 @@ with tab3:
 
                 if st.button("다시 추천"):
                     st.session_state.recommendations[USER] = None
+                    st.session_state.rec_avail[USER] = None
                     st.rerun()
 
 
@@ -912,6 +946,7 @@ with tab4:
                 try:
                     td = database.get_taste_stats(USER) if use_taste and len(aw) >= 3 else None
                     st.session_state.budget_recs = claude_helper.get_budget_recommendations(bmin, bmax, td)
+                    st.session_state.budget_avail = None  # 새 추천 시 판매처 확인 초기화
                     st.session_state.budget_min = bmin
                     st.session_state.budget_max = bmax
                 except Exception as e:
@@ -934,11 +969,41 @@ with tab4:
             )
             if br.get('budget_summary'): st.info(br['budget_summary'])
 
+            # ── 한국 판매처 실시간 확인 버튼 ──
+            budget_avail = st.session_state.budget_avail
+            if not budget_avail:
+                if st.button("🔍 한국 판매처 실시간 확인", key="budget_avail_btn"):
+                    wine_names = [r.get('name','') for r in br.get('recommendations',[]) if r.get('name')]
+                    with st.spinner("한국 온라인 판매처 검색 중... (20~40초)"):
+                        try:
+                            avail = claude_helper.check_wines_availability_korea(wine_names)
+                            st.session_state.budget_avail = avail
+                            st.rerun()
+                        except Exception as e:
+                            st.error(str(e))
+            else:
+                ok = sum(1 for v in budget_avail.values() if v.get('available'))
+                total = len(budget_avail)
+                st.caption(f"✅ 판매처 확인 완료 — {total}개 중 {ok}개 국내 온라인 판매 확인")
+
             for i, rec in enumerate(br.get('recommendations',[]), 1):
                 badge = vivino_badge(rec.get('vivino_score'))
                 price_str = f" · {rec['price']:,}원" if rec.get('price') else ""
                 with st.expander(f"#{i} {rec.get('name','')}{price_str}"):
                     if badge: st.markdown(badge, unsafe_allow_html=True)
+
+                    # 판매처 배지
+                    budget_avail = st.session_state.budget_avail or {}
+                    avail_info = budget_avail.get(rec.get('name', ''))
+                    if avail_info:
+                        if avail_info.get('available'):
+                            stores = avail_info.get('stores', '')
+                            st.success(f"✅ 한국 판매 확인{' · ' + stores if stores else ''}")
+                        else:
+                            st.error(f"❌ 국내 온라인 판매처 미확인")
+                        if avail_info.get('note'):
+                            st.caption(avail_info['note'])
+
                     col_a, col_b = st.columns(2)
                     with col_a:
                         if rec.get('producer'):     st.markdown(f"**생산자** · {rec['producer']}")
@@ -962,6 +1027,7 @@ with tab4:
 
         if st.button("다시 추천"):
             st.session_state.budget_recs = None
+            st.session_state.budget_avail = None
             st.rerun()
 
 # 푸터
